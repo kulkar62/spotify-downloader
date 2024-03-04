@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spotify Playlist Downloader</title>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      background-color: #f0f0f0;
+      
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+
+    h1 {
+      text-align: center;
+      color: #191414;
+    }
+
+    form {
+      background-color: #fff;
+      color: #191414;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      padding: 20px;
+      width: 500px;
+      margin-top: 20px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+    }
+
+    input {
+      width: 100%;
+      padding: 8px;
+      margin-bottom: 16px;
+      box-sizing: border-box;
+    }
+
+    button {
+      background-color: #1DB954;
+      color: #fff;
+      padding: 10px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #45a049;
+    }
+
+    #result {
+      margin-top: 20px;
+      font-weight: bold;
+      color: #191414;
+    }
+
+    #error {
+      margin-top: 10px;
+      color: #ff0000;
+    }
+
+    #progressContainer {
+      position: relative;
+      width: 200px;
+      height: 200px;
+      margin-top: 20px;
+    }
+
+    #progressBar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      color: #1DB954
+    }
+
+    #progressBarText {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 18px;
+      color: #191414;
+    }
+
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/progressbar.js@1.1.0/dist/progressbar.min.css">
+</head>
+<body>
+  <h1>Spotify Playlist Downloader</h1>
+
+  <form id="userInputForm">
+    <label for="userInput">Enter a Spotify playlist link:</label>
+    <input type="text" id="userInput" name="userInput" required>
+    <button type="submit" id="submitButton">Submit</button>
+  </form>
+
+  <div id="error"></div>
+  <div id="result"></div>
+
+
+  <div id="progressContainer">
+    <div id="progressBar"></div>
+    <div id="progressBarText"></div>
+  </div>
+  
+
+  <script src="https://cdn.jsdelivr.net/npm/progressbar.js@1.1.1/dist/progressbar.min.js"></script>
+
+  <script>
+    document.getElementById('userInputForm').addEventListener('submit', async function (event) {
+      event.preventDefault();
+
+      document.getElementById('submitButton').disabled = true;
+
+      const userInput = document.getElementById('userInput').value;
+      
+
+      // Validate if the input is a valid link
+      if (!isValidLink(userInput)) {
+        document.getElementById('error').innerText = 'Please enter a valid Spotify playlist link.';
+        document.getElementById('submitButton').disabled = false;
+        return;
+      }
+
+      // Clear any previous error messages
+      document.getElementById('error').innerText = '';
+
+      // Initialize Progress Bar
+      const progressBar = createProgressBar()
+      const progressBarText = document.getElementById('progressBarText');   
+
+      try {
+        const data = await dataSetup(userInput);
+        const songDataLength = data.songDataLength
+        for (let i = 1; i <= songDataLength; i++) {
+          
+          await fetch("/download-song", {
+            method: 'POST'
+          })
+
+          // Update the progress bar
+          progressBar.animate(i / songDataLength);
+          progressBarText.textContent = `${Math.round((i / songDataLength) * 100)}%`;
+
+      }
+
+
+      } catch (error) {
+        console.error('Error fetching data:', error);
+      } finally {
+
+        
+        const response =  await fetch('/download-zip', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        })
+
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'Playlist.zip';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        
+
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        progressBar.destroy();
+        progressBarText.textContent = '';
+        document.getElementById('submitButton').disabled = false;
+
+        await fetch("/clean", {
+            method: 'POST'
+        })
+
+      }
+  
+    });
+
+
+    async function dataSetup(userInput) {
+      const response = await fetch('/data-setup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ userInput })
+      });
+
+      return response.json()
+    }
+
+    async function downloadFile() {
+      await fetch("/download-file", {
+            method: 'POST'
+      })
+    }
+
+    function createProgressBar() {
+    return new ProgressBar.Circle('#progressBar', {
+      strokeWidth: 4,
+      easing: 'easeInOut',
+      duration: 2000,
+      color: '#4CAF50',
+      trailColor: '#eee',
+      trailWidth: 4,
+      svgStyle: { width: '100%', height: '100%' }
+    });
+  }
+
+
+    function isValidLink(link) {
+      const spotifyPlaylistPattern = /^https:\/\/open\.spotify\.com\/playlist\/.+/;
+      return spotifyPlaylistPattern.test(link);
+    }
+  </script>
+</body>
+</html>
